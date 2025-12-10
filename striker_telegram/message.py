@@ -1,77 +1,90 @@
-import re
 import time
 import requests
+
 """
 Editar ou Enviar Mensagens do Telegram
 """
 
 
-def send_message(
+def send(
     message: str,
     chat_id: str,
-    token: str
-    ):
+    token: str,
+    parse_mode: str = "MarkdownV2",
+    hide_web_page_preview: bool = True,
+    verbose: bool = True,
+    ) -> tuple:
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = {
         "chat_id": chat_id,
         "text": message,
-        "disable_web_page_preview": True,
-        "parse_mode": "MarkdownV2"
+        "disable_web_page_preview": hide_web_page_preview,
+        "parse_mode": parse_mode
     }
 
     response = requests.post(url, data=data)
+    
     try:
         response_data = response.json()
+    
     except ValueError:
-        print("Resposta do Telegram não é JSON:")
+        print("Telegram answered a non-json data")
         print(response.text)
         return None, None
 
-    if response.ok and response_data.get('ok'):
+    if response.ok and response_data.get('ok'):      
         message_id = response_data['result']['message_id']
-        print(f"Telegram message sent successfully. ID: {message_id}")
+        
+        if verbose:
+            print(f"Telegram message sent successfully. ID: {message_id}")
+        
         return message_id, chat_id
 
     # checa rate limit via status_code
-    if response.status_code == 429:
+    elif response.status_code == 429:
         print("Too Many Requests, sleeping...")
         retry_after = response_data.get("parameters", {}).get("retry_after", 60)
         time.sleep(retry_after + 1)
         return None, None
 
-    # erro genérico
-    print("Telegram message not sent")
-    print(f"Status code: {response.status_code}")
-    print(f"Response: {response_data}")
+    else:# erro genérico
+        print("Telegram message not sent")
+        print(f"Status code: {response.status_code}")
+        print(f"Response: {response_data}")
     return None, None
 
 
-def edit_message(
+def edit(
     message_id: str,
     message: str, 
     chat_id: str ,
-    token: str
-    ):
+    token: str,
+    parse_mode: str = "MarkdownV2",
+    hide_web_page_preview: bool = True,
+    verbose: bool = True,
+    ) -> bool:
 
     url = f"https://api.telegram.org/bot{token}/editMessageText"
     data = {
         "chat_id": chat_id,
         "message_id": message_id,
         "text": message,
-        "parse_mode": "MarkdownV2",
-        "disable_web_page_preview": True
+        "parse_mode": parse_mode,
+        "disable_web_page_preview": hide_web_page_preview
     }
 
     response = requests.post(url, data=data)
     try:
         response_data = response.json()
+    
     except ValueError:
-        print(f"Resposta inválida ao editar mensagem {message_id}: {response.text}")
+        print(f"Error Trying to edit message id {message_id}: {response.text}")
         return False
 
     if response.ok and response_data.get('ok'):
-        print(f"Message {message_id} edited successfully.")
+        if verbose:
+            print(f"Message {message_id} edited successfully.")
         return True
 
     if response.status_code == 429:
@@ -83,14 +96,3 @@ def edit_message(
     print(f"Error editing message {message_id}: {response.status_code} - {response_data}")
     return False
 
-
-def escape_markdown(
-    text
-    ) -> str:
-    """Escapes MardownV2 special Characters"""
-
-    if type(text) is not str:
-            return text
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
- 
